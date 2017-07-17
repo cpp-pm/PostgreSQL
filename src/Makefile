@@ -23,7 +23,6 @@ SUBDIRS = \
 	interfaces \
 	backend/replication/libpqwalreceiver \
 	fe_utils \
-	bin \
 	pl \
 	makefiles \
 	test/regress \
@@ -76,7 +75,6 @@ coverage:
 	$(MAKE) -C backend/snowball $@
 	$(MAKE) -C interfaces $@
 	$(MAKE) -C backend/replication/libpqwalreceiver $@
-	$(MAKE) -C bin $@
 	$(MAKE) -C pl $@
 
 

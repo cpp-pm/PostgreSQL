@@ -67,10 +67,6 @@ my $frontend_extralibs = {
 my $frontend_extraincludes = {
 	'initdb' => ['src/timezone'],
 	'psql'   => ['src/backend'] };
-my $frontend_extrasource = {
-	'psql' => ['src/bin/psql/psqlscanslash.l'],
-	'pgbench' =>
-	  [ 'src/bin/pgbench/exprscan.l', 'src/bin/pgbench/exprparse.y' ] };
 my @frontend_excludes = (
 	'pgevent',     'pg_basebackup', 'pg_rewind', 'pg_dump',
 	'pg_xlogdump', 'scripts');
@@ -316,73 +312,6 @@ sub mkvcbuild
 	$pgregress_isolation->AddDirResourceFile('src/test/isolation');
 	$pgregress_isolation->AddReference($libpgcommon, $libpgport);
 
-	# src/bin
-	my $D;
-	opendir($D, 'src/bin') || croak "Could not opendir on src/bin!\n";
-	while (my $d = readdir($D))
-	{
-		next if ($d =~ /^\./);
-		next unless (-f "src/bin/$d/Makefile");
-		next if (grep { /^$d$/ } @frontend_excludes);
-		AddSimpleFrontend($d);
-	}
-
-	my $pgbasebackup = AddSimpleFrontend('pg_basebackup', 1);
-	$pgbasebackup->AddFile('src/bin/pg_basebackup/pg_basebackup.c');
-	$pgbasebackup->AddLibrary('ws2_32.lib');
-
-	my $pgreceivexlog = AddSimpleFrontend('pg_basebackup', 1);
-	$pgreceivexlog->{name} = 'pg_receivexlog';
-	$pgreceivexlog->AddFile('src/bin/pg_basebackup/pg_receivexlog.c');
-	$pgreceivexlog->AddLibrary('ws2_32.lib');
-
-	my $pgrecvlogical = AddSimpleFrontend('pg_basebackup', 1);
-	$pgrecvlogical->{name} = 'pg_recvlogical';
-	$pgrecvlogical->AddFile('src/bin/pg_basebackup/pg_recvlogical.c');
-	$pgrecvlogical->AddLibrary('ws2_32.lib');
-
-	my $pgrewind = AddSimpleFrontend('pg_rewind', 1);
-	$pgrewind->{name} = 'pg_rewind';
-	$pgrewind->AddFile('src/backend/access/transam/xlogreader.c');
-	$pgrewind->AddLibrary('ws2_32.lib');
-	$pgrewind->AddDefine('FRONTEND');
-
-	my $pgevent = $solution->AddProject('pgevent', 'dll', 'bin');
-	$pgevent->AddFiles('src/bin/pgevent', 'pgevent.c', 'pgmsgevent.rc');
-	$pgevent->AddResourceFile('src/bin/pgevent', 'Eventlog message formatter',
-		'win32');
-	$pgevent->RemoveFile('src/bin/pgevent/win32ver.rc');
-	$pgevent->UseDef('src/bin/pgevent/pgevent.def');
-	$pgevent->DisableLinkerWarnings('4104');
-
-	my $pgdump = AddSimpleFrontend('pg_dump', 1);
-	$pgdump->AddIncludeDir('src/backend');
-	$pgdump->AddFile('src/bin/pg_dump/pg_dump.c');
-	$pgdump->AddFile('src/bin/pg_dump/common.c');
-	$pgdump->AddFile('src/bin/pg_dump/pg_dump_sort.c');
-	$pgdump->AddLibrary('ws2_32.lib');
-
-	my $pgdumpall = AddSimpleFrontend('pg_dump', 1);
-
-	# pg_dumpall doesn't use the files in the Makefile's $(OBJS), unlike
-	# pg_dump and pg_restore.
-	# So remove their sources from the object, keeping the other setup that
-	# AddSimpleFrontend() has done.
-	my @nodumpall = grep { m!src/bin/pg_dump/.*\.c$! }
-	  keys %{ $pgdumpall->{files} };
-	delete @{ $pgdumpall->{files} }{@nodumpall};
-	$pgdumpall->{name} = 'pg_dumpall';
-	$pgdumpall->AddIncludeDir('src/backend');
-	$pgdumpall->AddFile('src/bin/pg_dump/pg_dumpall.c');
-	$pgdumpall->AddFile('src/bin/pg_dump/dumputils.c');
-	$pgdumpall->AddLibrary('ws2_32.lib');
-
-	my $pgrestore = AddSimpleFrontend('pg_dump', 1);
-	$pgrestore->{name} = 'pg_restore';
-	$pgrestore->AddIncludeDir('src/backend');
-	$pgrestore->AddFile('src/bin/pg_dump/pg_restore.c');
-	$pgrestore->AddLibrary('ws2_32.lib');
-
 	my $zic = $solution->AddProject('zic', 'exe', 'utils');
 	$zic->AddFiles('src/timezone', 'zic.c');
 	$zic->AddDirResourceFile('src/timezone');
@@ -615,30 +544,6 @@ sub mkvcbuild
 		$p->AddReference($postgres);
 	}
 
-	$mf = Project::read_file('src/bin/scripts/Makefile');
-	$mf =~ s{\\\r?\n}{}g;
-	$mf =~ m{PROGRAMS\s*=\s*(.*)$}m
-	  || die 'Could not match in bin/scripts/Makefile' . "\n";
-	foreach my $prg (split /\s+/, $1)
-	{
-		my $proj = $solution->AddProject($prg, 'exe', 'bin');
-		$mf =~ m{$prg\s*:\s*(.*)$}m
-		  || die 'Could not find script define for $prg' . "\n";
-		my @files = split /\s+/, $1;
-		foreach my $f (@files)
-		{
-			$f =~ s/\.o$/\.c/;
-			if ($f =~ /\.c$/)
-			{
-				$proj->AddFile('src/bin/scripts/' . $f);
-			}
-		}
-		$proj->AddIncludeDir('src/interfaces/libpq');
-		$proj->AddReference($libpq, $libpgfeutils, $libpgcommon, $libpgport);
-		$proj->AddDirResourceFile('src/bin/scripts');
-		$proj->AddLibrary('ws2_32.lib');
-	}
-
 	# Regression DLL and EXE
 	my $regress = $solution->AddProject('regress', 'dll', 'misc');
 	$regress->AddFile('src/test/regress/regress.c');
@@ -654,16 +559,6 @@ sub mkvcbuild
 	$pgregress->AddDirResourceFile('src/test/regress');
 	$pgregress->AddReference($libpgcommon, $libpgport);
 
-	# fix up pg_xlogdump once it's been set up
-	# files symlinked on Unix are copied on windows
-	my $pg_xlogdump = AddSimpleFrontend('pg_xlogdump');
-	$pg_xlogdump->AddDefine('FRONTEND');
-	foreach my $xf (glob('src/backend/access/rmgrdesc/*desc.c'))
-	{
-		$pg_xlogdump->AddFile($xf);
-	}
-	$pg_xlogdump->AddFile('src/backend/access/transam/xlogreader.c');
-
 	$solution->Save();
 	return $solution->{vcver};
 }
@@ -671,27 +566,6 @@ sub mkvcbuild
 #####################
 # Utility functions #
 #####################
-
-# Add a simple frontend project (exe)
-sub AddSimpleFrontend
-{
-	my $n        = shift;
-	my $uselibpq = shift;
-
-	my $p = $solution->AddProject($n, 'exe', 'bin');
-	$p->AddDir('src/bin/' . $n);
-	$p->AddReference($libpgfeutils, $libpgcommon, $libpgport);
-	if ($uselibpq)
-	{
-		$p->AddIncludeDir('src/interfaces/libpq');
-		$p->AddReference($libpq);
-	}
-
-	# Adjust module definition using frontend variables
-	AdjustFrontendProj($p);
-
-	return $p;
-}
 
 # Add a simple transform module
 sub AddTransformModule
@@ -849,16 +723,6 @@ sub AdjustContribProj
 		\@contrib_uselibpq,       \@contrib_uselibpgport,
 		\@contrib_uselibpgcommon, $contrib_extralibs,
 		$contrib_extrasource,     $contrib_extraincludes);
-}
-
-sub AdjustFrontendProj
-{
-	my $proj = shift;
-	AdjustModule(
-		$proj,                     $frontend_defines,
-		\@frontend_uselibpq,       \@frontend_uselibpgport,
-		\@frontend_uselibpgcommon, $frontend_extralibs,
-		$frontend_extrasource,     $frontend_extraincludes);
 }
 
 sub AdjustModule
