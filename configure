@@ -6122,28 +6122,8 @@ $as_echo "$with_systemd" >&6; }
 #
 # Readline
 #
-
-
-
-# Check whether --with-readline was given.
-if test "${with_readline+set}" = set; then :
-  withval=$with_readline;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-readline option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_readline=yes
-
-fi
+# No readline dependency required if bin tools are not built
+with_readline=no
 
 
 # readline on MinGW has problems with backslashes in psql and other bugs.
