@@ -398,14 +398,6 @@ s{PG_VERSION_STR "[^"]+"}{PG_VERSION_STR "PostgreSQL $self->{strver}$extraver, c
 		close($o);
 	}
 
-	if (IsNewer('src/bin/psql/sql_help.h', 'src/bin/psql/create_help.pl'))
-	{
-		print "Generating sql_help.h...\n";
-		chdir('src/bin/psql');
-		system("perl create_help.pl ../../../doc/src/sgml/ref sql_help");
-		chdir('../../..');
-	}
-
 	if (IsNewer(
 			'src/interfaces/ecpg/preproc/preproc.y',
 			'src/backend/parser/gram.y'))
